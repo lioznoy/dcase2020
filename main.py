@@ -5,7 +5,7 @@ import sys
 import os
 import os.path as osp
 from train import train_net
-from model import ClassifierModule
+from model import ClassifierModule, MLP
 
 def get_args():
     parser = argparse.ArgumentParser(description='Run train on dcase 2020 challenge task 1',
@@ -49,7 +49,8 @@ if __name__ == '__main__':
     print(f'Using device {device}')
     print(f'Using device {device}', file=open(osp.join('outputs', f'log_{timestamp}.txt'), 'a'))
     # init net
-    net = ClassifierModule(args.backbone)
+    # net = ClassifierModule(args.backbone)
+    net = MLP()
     print(net, file=open(osp.join('outputs', f'log_{timestamp}.txt'), 'a'))
     net.to(device=device)
     # load checkpoint weights

@@ -10,7 +10,7 @@ def eval_net(net, val_loader, device, criterion):
             mels = batch['mels']
             label = batch['label']
             mels = mels.to(device=device, dtype=torch.float32)
-            label = label.to(device=device, dtype=torch.float32)
+            label = label.to(device=device, dtype=torch.long)
 
             with torch.no_grad():
                 pred_vec = net(mels)

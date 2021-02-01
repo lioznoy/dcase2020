@@ -16,3 +16,23 @@ class ClassifierModule(nn.Module):
         # fc to 10 labels
         y = self.fc_class_vec(x1)
         return y
+
+
+class MLP(nn.Module):
+    def __init__(self):
+        super(MLP, self).__init__()
+        self.layers = nn.Sequential(
+            nn.Linear(500 * 40,  100 * 40),
+            nn.ReLU(),
+            nn.Linear(100 * 40, 50 * 40),
+            nn.ReLU(),
+            nn.Linear(50 * 40, 10 * 40),
+            nn.ReLU(),
+            nn.Linear(10 * 40, 10)
+        )
+
+    def forward(self, x):
+        # convert tensor (128, 1, 28, 28) --> (128, 1*28*28)
+        x = x.view(x.size(0), -1)
+        x = self.layers(x)
+        return x

@@ -29,8 +29,8 @@ def train_net(net, epochs, data_dir, folds_dir, dir_checkpoint, batch_size, lr, 
         Epochs:          {epochs}
         Batch size:      {batch_size}
         Learning rate:   {lr}
-        Training size:   {round(train_df.shape[0] / (train_df.shape[0] + val_df.shape[0]) * 100)}
-        Validation size: {round(val_df.shape[0] / (train_df.shape[0] + val_df.shape[0]) * 100)}
+        Training size:   {round(train_df.shape[0] / (train_df.shape[0] + val_df.shape[0]) * 100)}%
+        Validation size: {round(val_df.shape[0] / (train_df.shape[0] + val_df.shape[0]) * 100)}%
         Checkpoints dir: {dir_checkpoint}
         Device:          {device.type}
     ''')
@@ -38,8 +38,8 @@ def train_net(net, epochs, data_dir, folds_dir, dir_checkpoint, batch_size, lr, 
         Epochs:          {epochs}
         Batch size:      {batch_size}
         Learning rate:   {lr}
-        Training size:   {round(train_df.shape[0] / (train_df.shape[0] + val_df.shape[0]) * 100)}
-        Validation size: {round(val_df.shape[0] / (train_df.shape[0] + val_df.shape[0]) * 100)}
+        Training size:   {round(train_df.shape[0] / (train_df.shape[0] + val_df.shape[0]) * 100)}%
+        Validation size: {round(val_df.shape[0] / (train_df.shape[0] + val_df.shape[0]) * 100)}%
         Checkpoints dir: {dir_checkpoint}
         Device:          {device.type}
     ''', file=open(osp.join('outputs', f'log_{timestamp}.txt'), 'a'))

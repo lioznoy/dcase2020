@@ -21,10 +21,10 @@ class BasicDataset(Dataset):
         waveform, sample_rate = torchaudio.load(osp.join(self.data_dir, audio_file))
         one_mel = torchaudio.transforms.MelSpectrogram(sample_rate, n_fft=1766, win_length=1766, hop_length=883,
                                                        n_mels=40)(waveform)
-        mel = torch.cat([one_mel, one_mel, one_mel], dim=0)
+        # mel = torch.cat([one_mel, one_mel, one_mel], dim=0)
         label = LABELS_10[self.labels.iloc[i]]
 
         return {
-            'mels': mel.type(torch.FloatTensor),
+            'mels': one_mel.type(torch.FloatTensor),
             'label': torch.tensor(label)
         }
