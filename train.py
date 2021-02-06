@@ -1,4 +1,4 @@
-from utils import plot_loss
+from utils import plot_loss_score
 import pandas as pd
 import os.path as osp
 from dataset import BasicDataset
@@ -9,9 +9,12 @@ import torch.nn as nn
 from tqdm import tqdm
 import numpy as np
 from eval import eval_net
+from focal_loss import FocalLoss
+from sklearn.metrics import accuracy_score
 
 
-def train_net(net, epochs, data_dir, folds_dir, dir_checkpoint, batch_size, lr, device, n_classes, timestamp):
+def train_net(net, epochs, data_dir, features_dir, folds_dir, dir_checkpoint, batch_size, lr, device, n_classes,
+              timestamp):
     # load folds
     train_csv = osp.join(folds_dir, 'fold1_train.csv')
     val_csv = osp.join(folds_dir, 'fold1_evaluate.csv')
@@ -19,10 +22,10 @@ def train_net(net, epochs, data_dir, folds_dir, dir_checkpoint, batch_size, lr, 
     val_df = pd.read_csv(val_csv, sep='\t')
 
     # initialize data loaders
-    dataset_train = BasicDataset(data_dir, train_df)
-    dataset_val = BasicDataset(data_dir, val_df)
-    train_loader = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
-    val_loader = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True,
+    dataset_train = BasicDataset(data_dir, features_dir, train_df)
+    dataset_val = BasicDataset(data_dir, features_dir, val_df)
+    train_loader = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    val_loader = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True,
                             drop_last=True)
 
     print(f'''\nStarting training:
@@ -46,7 +49,8 @@ def train_net(net, epochs, data_dir, folds_dir, dir_checkpoint, batch_size, lr, 
 
     # set optimizer
     # optimizer = optim.RMSprop(net.parameters(), lr=lr, weight_decay=1e-5, momentum=0.9)
-    optimizer = optim.Adam(net.parameters(), lr=lr) #weight_decay=1e-5)
+    optimizer = optim.Adam(net.parameters(), lr=lr, weight_decay=1e-5)
+    # optimizer = optim.SGD(net.parameters(), lr=lr, weight_decay=1e-5)
     # optimizer = torch.optim.AdamW(net.parameters(), lr = lr , betas=(0.9, 0.999), eps=1e-08, weight_decay=0.01, amsgrad=False)
 
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=2)
@@ -54,14 +58,20 @@ def train_net(net, epochs, data_dir, folds_dir, dir_checkpoint, batch_size, lr, 
     criterion = nn.CrossEntropyLoss()
     loss_val = []
     loss_train = []
+    score_val = []
+    score_train = []
 
     # start epochs
     for epoch in range(epochs):
         net.train()
         epoch_loss = []
+        all_score_train = []
         with tqdm(total=train_df.shape[0],
                   desc=f'Epoch {epoch + 1}/{epochs}', unit='img') as pbar:
-            for batch in train_loader:
+            for index, batch in enumerate(train_loader):
+                # if np.mod(index, 6) != 0:
+                #     pbar.update(mels.shape[0])
+                #     continue
                 mels = batch['mels']
                 label = batch['label']
                 mels = mels.to(device=device, dtype=torch.float32)
@@ -73,10 +83,17 @@ def train_net(net, epochs, data_dir, folds_dir, dir_checkpoint, batch_size, lr, 
                 optimizer.zero_grad()
                 loss.backward()
                 # nn.utils2.clip_grad_value_(net.parameters(), 0.25)
+                net.eval()
+                pred_vec_eval = net(mels)
+                all_score_train.append(accuracy_score(pred_vec_eval.argmax(dim=1).cpu().numpy(),
+                                                  label.flatten().cpu().numpy()))
+                net.train()
                 optimizer.step()
                 pbar.update(mels.shape[0])
-            val_loss = eval_net(net, val_loader, device, criterion)
-            loss_val.append((val_loss.item()))
+            val_loss, val_score = eval_net(net, val_loader, device, criterion)
+            score_val.append(val_score)
+            loss_val.append(val_loss.item())
+            score_train.append(sum(all_score_train) / len(all_score_train))
             loss_train.append(sum(epoch_loss) / len(epoch_loss))
             torch.save(net.state_dict(),
                        osp.join(dir_checkpoint, f'CP_epoch{epoch + 1}.pth'))
@@ -86,11 +103,5 @@ def train_net(net, epochs, data_dir, folds_dir, dir_checkpoint, batch_size, lr, 
             print(f'saved weights to {osp.join(dir_checkpoint, f"CP_epoch_{epoch + 1}.pth")}',
                   file=open(osp.join('outputs', f'log_{timestamp}.txt'), 'a'))
 
-    plot_loss(np.arange(1, epochs + 1).astype(int), loss_val, loss_train, timestamp)
-
-
-
-
-
-
-
+        plot_loss_score(np.arange(1, epoch + 2).astype(int), loss_train, loss_val, timestamp, 'loss')
+        plot_loss_score(np.arange(1, epoch + 2).astype(int), score_train, score_val, timestamp, 'score')

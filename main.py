@@ -5,20 +5,23 @@ import sys
 import os
 import os.path as osp
 from train import train_net
-from model import ClassifierModule, MLP
+from model import ClassifierModule, BaseLine
 
 def get_args():
     parser = argparse.ArgumentParser(description='Run train on dcase 2020 challenge task 1',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-e', '--epochs', type=int, default=10, help='Number of epochs')
-    parser.add_argument('-b', '--batchsize', type=int, default=4, help='Batch size')
+    parser.add_argument('-b', '--batchsize', type=int, default=64, help='Batch size')
     parser.add_argument('-l', '--lr', type=float, default=0.0001, help='Learning rate')
     parser.add_argument('-w', '--weights', type=str, default=False, help='Load model from a .pth file')
     parser.add_argument('--data_dir', '--data_dir', type=str,
-                        default='../dataset/TAU-urban-acoustic-scenes-2020-mobile-development/audio',
+                        default='../datasets/TAU-urban-acoustic-scenes-2020-mobile-development/audio',
+                        help='dir with audio files')
+    parser.add_argument('--features_dir', '--features_dir', type=str,
+                        default='../datasets/TAU-urban-acoustic-scenes-2020-mobile-development/mel_features_3d',
                         help='dir with audio files')
     parser.add_argument('--folds_dir', '--folds_dir', type=str,
-                        default='../dataset/TAU-urban-acoustic-scenes-2020-mobile-development/evaluation_setup/',
+                        default='../datasets/TAU-urban-acoustic-scenes-2020-mobile-development/evaluation_setup/',
                         help='dir with folds csv files')
     parser.add_argument('--dir_checkpoint', '--dir_checkpoint', type=str,
                         default='checkpoints', help='dir to save best nets during training')
@@ -49,8 +52,8 @@ if __name__ == '__main__':
     print(f'Using device {device}')
     print(f'Using device {device}', file=open(osp.join('outputs', f'log_{timestamp}.txt'), 'a'))
     # init net
-    # net = ClassifierModule(args.backbone)
-    net = MLP()
+    net = ClassifierModule(args.backbone)
+    # net = BaseLine()
     print(net, file=open(osp.join('outputs', f'log_{timestamp}.txt'), 'a'))
     net.to(device=device)
     # load checkpoint weights
@@ -61,6 +64,7 @@ if __name__ == '__main__':
         train_net(net=net,
                   epochs=args.epochs,
                   data_dir=args.data_dir,
+                  features_dir=args.features_dir,
                   folds_dir=args.folds_dir,
                   dir_checkpoint=args.dir_checkpoint,
                   batch_size=args.batchsize,

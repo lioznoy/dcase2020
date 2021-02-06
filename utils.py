@@ -8,10 +8,12 @@ LABELS_10 = {'airport': 0, 'shopping_mall': 1, 'metro_station': 2, 'street_pedes
 LABELS_3 = {'indoor': 0, 'outdoor': 1, 'transportation': 2}
 
 
-def plot_loss(epochs, loss_train, loss_val, timestamp):
-    plt.plot(epochs, loss_train, 'r')
-    plt.plot(epochs, loss_val, 'g')
+def plot_loss_score(epochs, train, val, timestamp, loss_score):
+    plt.plot(epochs, train, 'r')
+    plt.plot(epochs, val, 'g')
     plt.xlabel('Epochs', fontsize=18)
-    plt.ylabel('Loss', fontsize=16)
-    plt.legend(["train loss", "validation loss"])
-    plt.savefig(osp.join('outputs', f'losses_{timestamp}.jpg'))
+    plt.ylabel(f'{loss_score}', fontsize=16)
+    plt.legend([f"train {loss_score}", f"validation {loss_score}"])
+    plt.grid()
+    plt.savefig(osp.join('outputs', f'{loss_score}_{timestamp}.jpg'))
+    plt.close()
