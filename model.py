@@ -2,17 +2,34 @@ import torch.nn as nn
 import torchvision.models as models
 
 
-class ClassifierModule(nn.Module):
+class ClassifierModule10(nn.Module):
     def __init__(self, backbone):
-        super(ClassifierModule, self).__init__()
-        self.net = models.__dict__[backbone](pretrained=False)
+        super(ClassifierModule10, self).__init__()
+        self.net_low_freq = models.__dict__[backbone](pretrained=False)
+        self.net_high_freq = models.__dict__[backbone](pretrained=False)
         self.fc_class_vec = nn.Linear(1000, 10)
 
     def forward(self, x):
         # pass through net
-        x1 = self.net(x)
+        n_freq = x.shape[2]
+        x_low_freq = self.net_low_freq(x[:, :, :int(n_freq / 2), :])
+        x_high_freq = self.net_high_freq(x[:, :, int(n_freq / 2):, :])
         # fc to 10 labels
-        y = self.fc_class_vec(x1)
+        y = self.fc_class_vec((x_low_freq + x_high_freq) / 2)
+        return y
+
+
+class ClassifierModule3(nn.Module):
+    def __init__(self, backbone):
+        super(ClassifierModule3, self).__init__()
+        self.net = models.__dict__[backbone](pretrained=False)
+        self.fc_class_vec = nn.Linear(1000, 3)
+
+    def forward(self, x):
+        # pass through net
+        x = (self.net(x[:, :3, :, :]) + self.net(x[:, 3:, :, :])) / 2
+        # fc to 10 labels
+        y = self.fc_class_vec(x)
         return y
 
 
@@ -47,7 +64,6 @@ class BaseLine(nn.Module):
         x = self.dense(x)
         return x
 
-
 # class ResNet_17_ASC(nn.Module):
 #     def __init__(self, use_relu):
 #         super(ResNet_17_ASC, self).__init__()
@@ -66,11 +82,11 @@ class BaseLine(nn.Module):
 #                   bias=False)
 #         )
 
-    #
-    #
-    # def forward(self, x):
-    #     x = self.layer1(x)
-    #     x = self.layer2(x)
-    #     x = x.view(x.size(0), -1)
-    #     x = self.dense(x)
-    #     return x
+#
+#
+# def forward(self, x):
+#     x = self.layer1(x)
+#     x = self.layer2(x)
+#     x = x.view(x.size(0), -1)
+#     x = self.dense(x)
+#     return x

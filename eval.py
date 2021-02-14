@@ -1,8 +1,9 @@
 from tqdm import tqdm
 import torch
 from sklearn.metrics import accuracy_score
+import torch.nn.functional as F
 
-def eval_net(net, val_loader, device, criterion):
+def eval_net(net, val_loader, device, criterion, n_classes):
     net.eval()
     n_val = len(val_loader)
     tot_loss = 0
@@ -13,12 +14,13 @@ def eval_net(net, val_loader, device, criterion):
             label = batch['label']
             mels = mels.to(device=device, dtype=torch.float32)
             label = label.to(device=device, dtype=torch.long)
-
+            _label = label
+            label = F.one_hot(label, n_classes)
             with torch.no_grad():
                 pred_vec = net(mels)
 
             tot_loss += criterion(pred_vec, label)
-            tot_score += accuracy_score(pred_vec.argmax(dim=1).cpu().numpy(), label.flatten().cpu().numpy())
+            tot_score += accuracy_score(pred_vec.argmax(dim=1).cpu().numpy(), _label.flatten().cpu().numpy())
             pbar.update()
 
         net.train()

@@ -5,7 +5,9 @@ import sys
 import os
 import os.path as osp
 from train import train_net
-from model import ClassifierModule, BaseLine
+from model import ClassifierModule10, ClassifierModule3, BaseLine
+from model_resnet_with_att import ResNetk
+
 
 def get_args():
     parser = argparse.ArgumentParser(description='Run train on dcase 2020 challenge task 1',
@@ -14,26 +16,43 @@ def get_args():
     parser.add_argument('-b', '--batchsize', type=int, default=64, help='Batch size')
     parser.add_argument('-l', '--lr', type=float, default=0.0001, help='Learning rate')
     parser.add_argument('-w', '--weights', type=str, default=False, help='Load model from a .pth file')
-    parser.add_argument('--data_dir', '--data_dir', type=str,
+
+    parser.add_argument('--data_dir_10', '--data_dir_10', type=str,
                         default='../datasets/TAU-urban-acoustic-scenes-2020-mobile-development/audio',
                         help='dir with audio files')
-    parser.add_argument('--features_dir', '--features_dir', type=str,
+    parser.add_argument('--data_dir_3', '--data_dir_3', type=str,
+                        default='../datasets/TAU-urban-acoustic-scenes-2020-3class-development/audio',
+                        help='dir with audio files')
+
+    parser.add_argument('--features_dir_10', '--features_dir_10', type=str,
                         default='../datasets/TAU-urban-acoustic-scenes-2020-mobile-development/mel_features_3d',
                         help='dir with audio files')
-    parser.add_argument('--folds_dir', '--folds_dir', type=str,
+    parser.add_argument('--features_dir_3', '--features_dir_3', type=str,
+                        default='../datasets/TAU-urban-acoustic-scenes-2020-3class-development/mel_features_3d',
+                        help='dir with audio files')
+
+    parser.add_argument('--folds_dir_10', '--folds_dir_10', type=str,
                         default='../datasets/TAU-urban-acoustic-scenes-2020-mobile-development/evaluation_setup/',
                         help='dir with folds csv files')
+    parser.add_argument('--folds_dir_3', '--folds_dir_3', type=str,
+                        default='../datasets/TAU-urban-acoustic-scenes-2020-3class-development/evaluation_setup/',
+                        help='dir with folds csv files')
+
     parser.add_argument('--dir_checkpoint', '--dir_checkpoint', type=str,
                         default='checkpoints', help='dir to save best nets during training')
     parser.add_argument('--n_classes', '--n_classes', type=int, default=10, help='number of classes')
     parser.add_argument('--gpu', '--gpu', type=str, default=0, help='gpu to use')
-    parser.add_argument('--backbone', '--backbone', type=str, default='resnet50', help='backbone for CNN classifier')
+    parser.add_argument('--backbone_10', '--backbone_10', type=str, default='resnet18',
+                        help='backbone for CNN classifier 10 classes')
+    parser.add_argument('--backbone_3', '--backbone_3', type=str, default='mobilenet_v2',
+                        help='backbone for CNN classifier 3 classes')
     return parser.parse_args()
 
 
 if __name__ == '__main__':
     # load args
     args = get_args()
+    assert args.n_classes == 3 or args.n_classes == 10, 'n_classes must be 3 or 10!'
     if not osp.exists('outputs'):
         os.mkdir('outputs')
     if not osp.exists(args.dir_checkpoint):
@@ -52,7 +71,11 @@ if __name__ == '__main__':
     print(f'Using device {device}')
     print(f'Using device {device}', file=open(osp.join('outputs', f'log_{timestamp}.txt'), 'a'))
     # init net
-    net = ClassifierModule(args.backbone)
+    # net = ResNetk(k=18, use_cbam_block=True, use_cbam_class=True)
+    if args.n_classes == 3:
+        net = ClassifierModule3(backbone=args.backbone_3)
+    elif args.n_classes == 10:
+        net = ClassifierModule10(backbone=args.backbone_10)
     # net = BaseLine()
     print(net, file=open(osp.join('outputs', f'log_{timestamp}.txt'), 'a'))
     net.to(device=device)
@@ -61,17 +84,30 @@ if __name__ == '__main__':
         net.load_state_dict(torch.load(args.weights, map_location=device))
     # start training
     try:
-        train_net(net=net,
-                  epochs=args.epochs,
-                  data_dir=args.data_dir,
-                  features_dir=args.features_dir,
-                  folds_dir=args.folds_dir,
-                  dir_checkpoint=args.dir_checkpoint,
-                  batch_size=args.batchsize,
-                  lr=args.lr,
-                  device=device,
-                  n_classes=args.n_classes,
-                  timestamp=timestamp)
+        if args.n_classes == 3:
+            train_net(net=net,
+                      epochs=args.epochs,
+                      data_dir=args.data_dir_3,
+                      features_dir=args.features_dir_3,
+                      folds_dir=args.folds_dir_3,
+                      dir_checkpoint=args.dir_checkpoint,
+                      batch_size=args.batchsize,
+                      lr=args.lr,
+                      device=device,
+                      n_classes=args.n_classes,
+                      timestamp=timestamp)
+        elif args.n_classes == 10:
+            train_net(net=net,
+                      epochs=args.epochs,
+                      data_dir=args.data_dir_10,
+                      features_dir=args.features_dir_10,
+                      folds_dir=args.folds_dir_10,
+                      dir_checkpoint=args.dir_checkpoint,
+                      batch_size=args.batchsize,
+                      lr=args.lr,
+                      device=device,
+                      n_classes=args.n_classes,
+                      timestamp=timestamp)
     except KeyboardInterrupt:
         torch.save(net.state_dict(), osp.join(args.dir_checkpoint, 'INTERRUPTED.pth'))
         print()

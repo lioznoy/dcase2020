@@ -4,7 +4,7 @@ import os.path as osp
 import pandas as pd
 from datetime import datetime
 import torch
-from model import ClassifierModule, BaseLine
+from model import ClassifierModule10, ClassifierModule3, BaseLine
 from dataset import BasicDataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -12,7 +12,6 @@ import numpy as np
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, accuracy_score
 from utils import LABELS_10
 import matplotlib.pyplot as plt
-
 
 
 def get_prediction(test_loader, net, device):
@@ -30,18 +29,19 @@ def get_prediction(test_loader, net, device):
     return all_labels, all_predictions
 
 
-def plot_results(prediction, labels, output_dir):
+def plot_results(prediction, labels, output_dir, rec_device):
     acc = round(accuracy_score(prediction, labels) * 100, 2)
     cm = confusion_matrix(labels, prediction, normalize='true')
     fig, ax = plt.subplots(figsize=(15, 15))
     plt.rcParams.update({'font.size': 16})
     cmd = ConfusionMatrixDisplay(cm, display_labels=list(LABELS_10.keys()))
     cmd.plot(cmap='Blues', xticks_rotation=60, values_format='.2f', ax=ax)
-    plt.title(f'Acoustic Scene Clasiffication - Confusion Matrix - Accuracy = {acc}%', fontsize=18, fontweight='bold')
+    plt.title(f'Acoustic Scene Clasiffication {rec_device}- Confusion Matrix - Accuracy = {acc}%', fontsize=18,
+              fontweight='bold')
     plt.xlabel('Predicted label', fontsize=18, fontweight='bold')
     plt.ylabel('True label', fontsize=18, fontweight='bold')
     plt.tight_layout()
-    plt.savefig(osp.join(output_dir, 'confusion_matrix.jpg'))
+    plt.savefig(osp.join(output_dir, f'confusion_matrix_{rec_device}.jpg'))
 
 
 def get_args():
@@ -84,16 +84,19 @@ if __name__ == '__main__':
     device = torch.device(f'cuda:{args.gpu}' if torch.cuda.is_available() else 'cpu')
     print(device)
     # init net
-    net = ClassifierModule(args.backbone)
+    net = ClassifierModule10(args.backbone)
     # net = BaseLine()
     net.to(device=device)
     net.load_state_dict(torch.load(args.weights, map_location=device))
     net.eval()
     # test data loader
-    dataset_test = BasicDataset(args.data_dir, args.features_dir, test_df)
+    dataset_test = BasicDataset(args.data_dir, args.features_dir, test_df, args.n_classes)
     test_loader = DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=True,
-                             drop_last=True)
+                             drop_last=False)
     prediction, labels = get_prediction(test_loader, net, device)
-    plot_results(prediction, labels, args.output_dir)
-
-
+    plot_results(prediction, labels, args.output_dir, rec_device='all')
+    rec_devices = test_df.apply(lambda x: x['filename'].split('/')[1].split('-')[-1].replace('.wav', ''), axis=1)
+    for rec_device in rec_devices.unique():
+        prediction_partial = prediction[rec_devices == rec_device]
+        labels_partial = labels[rec_devices == rec_device]
+        plot_results(prediction_partial, labels_partial, args.output_dir, rec_device=rec_device)

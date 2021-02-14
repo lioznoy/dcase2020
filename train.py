@@ -1,4 +1,4 @@
-from utils import plot_loss_score
+from utils import plot_loss_score, mixup
 import pandas as pd
 import os.path as osp
 from dataset import BasicDataset
@@ -6,11 +6,13 @@ import torch
 from torch.utils.data import DataLoader
 from torch import optim
 import torch.nn as nn
+import torch.nn.functional as F
 from tqdm import tqdm
 import numpy as np
 from eval import eval_net
-from focal_loss import FocalLoss
+from focal_loss_2 import FocalLoss
 from sklearn.metrics import accuracy_score
+import random
 
 
 def train_net(net, epochs, data_dir, features_dir, folds_dir, dir_checkpoint, batch_size, lr, device, n_classes,
@@ -22,8 +24,8 @@ def train_net(net, epochs, data_dir, features_dir, folds_dir, dir_checkpoint, ba
     val_df = pd.read_csv(val_csv, sep='\t')
 
     # initialize data loaders
-    dataset_train = BasicDataset(data_dir, features_dir, train_df)
-    dataset_val = BasicDataset(data_dir, features_dir, val_df)
+    dataset_train = BasicDataset(data_dir, features_dir, train_df, n_classes)
+    dataset_val = BasicDataset(data_dir, features_dir, val_df, n_classes)
     train_loader = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
     val_loader = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True,
                             drop_last=True)
@@ -49,13 +51,13 @@ def train_net(net, epochs, data_dir, features_dir, folds_dir, dir_checkpoint, ba
 
     # set optimizer
     # optimizer = optim.RMSprop(net.parameters(), lr=lr, weight_decay=1e-5, momentum=0.9)
-    optimizer = optim.Adam(net.parameters(), lr=lr, weight_decay=1e-5)
-    # optimizer = optim.SGD(net.parameters(), lr=lr, weight_decay=1e-5)
+    # optimizer = optim.Adam(net.parameters(), lr=lr)
+    optimizer = optim.SGD(net.parameters(), lr=lr, weight_decay=1e-5, momentum=0.9)
     # optimizer = torch.optim.AdamW(net.parameters(), lr = lr , betas=(0.9, 0.999), eps=1e-08, weight_decay=0.01, amsgrad=False)
 
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=2)
+    scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=120)
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = FocalLoss()
     loss_val = []
     loss_train = []
     score_val = []
@@ -69,13 +71,17 @@ def train_net(net, epochs, data_dir, features_dir, folds_dir, dir_checkpoint, ba
         with tqdm(total=train_df.shape[0],
                   desc=f'Epoch {epoch + 1}/{epochs}', unit='img') as pbar:
             for index, batch in enumerate(train_loader):
-                # if np.mod(index, 6) != 0:
+                # if np.mod(index, 10) != 0:
                 #     pbar.update(mels.shape[0])
                 #     continue
                 mels = batch['mels']
                 label = batch['label']
                 mels = mels.to(device=device, dtype=torch.float32)
                 label = label.to(device=device, dtype=torch.long)
+                _label = label
+                label = F.one_hot(label, n_classes)
+                if np.random.randn(1)[0] > 0:
+                    mels, label = mixup(mels, label, np.random.beta(0.2, 0.2))
                 pred_vec = net(mels)
                 loss = criterion(pred_vec, label)
                 epoch_loss.append(loss.item())
@@ -86,11 +92,12 @@ def train_net(net, epochs, data_dir, features_dir, folds_dir, dir_checkpoint, ba
                 net.eval()
                 pred_vec_eval = net(mels)
                 all_score_train.append(accuracy_score(pred_vec_eval.argmax(dim=1).cpu().numpy(),
-                                                  label.flatten().cpu().numpy()))
+                                                      _label.flatten().cpu().numpy()))
                 net.train()
                 optimizer.step()
+                scheduler.step(epoch + index / train_df.shape[0])
                 pbar.update(mels.shape[0])
-            val_loss, val_score = eval_net(net, val_loader, device, criterion)
+            val_loss, val_score = eval_net(net, val_loader, device, criterion, n_classes)
             score_val.append(val_score)
             loss_val.append(val_loss.item())
             score_train.append(sum(all_score_train) / len(all_score_train))
