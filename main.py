@@ -5,7 +5,7 @@ import sys
 import os
 import os.path as osp
 from train import train_net
-from model import ClassifierModule10, ClassifierModule3, BaseLine
+from model import ClassifierModule10, ClassifierModule3, BaseLine, FCNNModel, ClassifierModule10_2path
 from model_resnet_with_att import ResNetk
 
 
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     if args.n_classes == 3:
         net = ClassifierModule3(backbone=args.backbone_3)
     elif args.n_classes == 10:
-        net = ClassifierModule10(backbone=args.backbone_10)
+        net = ClassifierModule10_2path(backbone10=args.backbone_10, backbone3=args.backbone_10)
     # net = BaseLine()
     print(net, file=open(osp.join('outputs', f'log_{timestamp}.txt'), 'a'))
     net.to(device=device)

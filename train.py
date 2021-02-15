@@ -13,6 +13,7 @@ from eval import eval_net
 from focal_loss_2 import FocalLoss
 from sklearn.metrics import accuracy_score
 import random
+from utils import label_10_to_3, vec3_to_vec10
 
 
 def train_net(net, epochs, data_dir, features_dir, folds_dir, dir_checkpoint, batch_size, lr, device, n_classes,
@@ -24,8 +25,8 @@ def train_net(net, epochs, data_dir, features_dir, folds_dir, dir_checkpoint, ba
     val_df = pd.read_csv(val_csv, sep='\t')
 
     # initialize data loaders
-    dataset_train = BasicDataset(data_dir, features_dir, train_df, n_classes)
-    dataset_val = BasicDataset(data_dir, features_dir, val_df, n_classes)
+    dataset_train = BasicDataset(data_dir, features_dir, train_df, n_classes, test=False)
+    dataset_val = BasicDataset(data_dir, features_dir, val_df, n_classes, test=True)
     train_loader = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
     val_loader = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True,
                             drop_last=True)
@@ -55,7 +56,7 @@ def train_net(net, epochs, data_dir, features_dir, folds_dir, dir_checkpoint, ba
     optimizer = optim.SGD(net.parameters(), lr=lr, weight_decay=1e-5, momentum=0.9)
     # optimizer = torch.optim.AdamW(net.parameters(), lr = lr , betas=(0.9, 0.999), eps=1e-08, weight_decay=0.01, amsgrad=False)
 
-    scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=120)
+    scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=4)
 
     criterion = FocalLoss()
     loss_val = []
@@ -80,20 +81,32 @@ def train_net(net, epochs, data_dir, features_dir, folds_dir, dir_checkpoint, ba
                 label = label.to(device=device, dtype=torch.long)
                 _label = label
                 label = F.one_hot(label, n_classes)
-                if np.random.randn(1)[0] > 0:
+                if np.random.random(1)[0] > 0.8:
                     mels, label = mixup(mels, label, np.random.beta(0.2, 0.2))
-                pred_vec = net(mels)
-                loss = criterion(pred_vec, label)
+                if n_classes == 10:
+                    pred_vec10, pred_vec3 = net(mels)
+                    loss = criterion(pred_vec10 * vec3_to_vec10(pred_vec3, device), label)
+                else:  # n_classes=3
+                    pred_vec = net(mels)
+                    loss = criterion(pred_vec, label)
                 epoch_loss.append(loss.item())
                 pbar.set_postfix(**{'loss (batch)': loss.item()})
                 optimizer.zero_grad()
                 loss.backward()
-                # nn.utils2.clip_grad_value_(net.parameters(), 0.25)
-                net.eval()
-                pred_vec_eval = net(mels)
-                all_score_train.append(accuracy_score(pred_vec_eval.argmax(dim=1).cpu().numpy(),
-                                                      _label.flatten().cpu().numpy()))
-                net.train()
+                # nn.utils.clip_grad_value_(net.parameters(), 0.01)
+                if np.mod(index, 100) != 0:
+                    net.eval()
+                    if n_classes == 10:
+                        pred_vec10_eval, pred_vec3_eval = net(mels)
+                        all_score_train.append(accuracy_score(
+                            (pred_vec10_eval * vec3_to_vec10(pred_vec3_eval, device)).argmax(dim=1).cpu().numpy(),
+                            _label.flatten().cpu().numpy()))
+                    else:
+                        pred_vec_eval = net(mels)
+                        all_score_train.append(
+                            accuracy_score(pred_vec_eval.argmax(dim=1).flatten().cpu().numpy(),
+                                           _label.flatten().cpu().numpy()))
+                    net.train()
                 optimizer.step()
                 scheduler.step(epoch + index / train_df.shape[0])
                 pbar.update(mels.shape[0])

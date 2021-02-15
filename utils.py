@@ -12,6 +12,29 @@ LABELS_10 = {'airport': 0, 'shopping_mall': 1, 'metro_station': 2, 'street_pedes
 LABELS_3 = {'indoor': 0, 'outdoor': 1, 'transportation': 2}
 
 
+def label_10_to_3(label_vec_batch):
+    indoor = label_vec_batch[:, 0] + label_vec_batch[:, 1] + label_vec_batch[:, 2]
+    outdoor = label_vec_batch[:, 3] + label_vec_batch[:, 4] + label_vec_batch[:, 5] + label_vec_batch[:, 9]
+    transportation = label_vec_batch[:, 6] + label_vec_batch[:, 7] + label_vec_batch[:, 8]
+    new_3_vec = torch.cat([indoor, outdoor, transportation])
+    return new_3_vec
+
+
+def vec3_to_vec10(vec3, device):
+    vec10 = torch.zeros(vec3.shape[0], 10).to(device=device, dtype=torch.float32)
+    vec10[:, 0] = vec3[:, 0]
+    vec10[:, 1] = vec3[:, 0]
+    vec10[:, 2] = vec3[:, 0]
+    vec10[:, 3] = vec3[:, 1]
+    vec10[:, 4] = vec3[:, 1]
+    vec10[:, 5] = vec3[:, 1]
+    vec10[:, 9] = vec3[:, 1]
+    vec10[:, 6] = vec3[:, 2]
+    vec10[:, 7] = vec3[:, 2]
+    vec10[:, 8] = vec3[:, 2]
+    return vec10
+
+
 def plot_loss_score(epochs, train, val, timestamp, loss_score):
     plt.plot(epochs, train, 'r')
     plt.plot(epochs, val, 'g')

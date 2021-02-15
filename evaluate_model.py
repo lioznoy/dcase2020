@@ -90,7 +90,7 @@ if __name__ == '__main__':
     net.load_state_dict(torch.load(args.weights, map_location=device))
     net.eval()
     # test data loader
-    dataset_test = BasicDataset(args.data_dir, args.features_dir, test_df, args.n_classes)
+    dataset_test = BasicDataset(args.data_dir, args.features_dir, test_df, args.n_classes, test=True)
     test_loader = DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=True,
                              drop_last=False)
     prediction, labels = get_prediction(test_loader, net, device)
