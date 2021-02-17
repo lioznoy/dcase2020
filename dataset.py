@@ -8,13 +8,14 @@ import random
 
 
 class BasicDataset(Dataset):
-    def __init__(self, data_dir, features_dir, train_df, n_classes, test):
+    def __init__(self, data_dir, features_dir, train_df, n_classes, test, augmentations):
         self.data_dir = data_dir
         self.features_dir = features_dir
         self.file_names = train_df['filename']
         self.labels = train_df['scene_label']
         self.n_classes = n_classes
         self.test = test
+        self.augmentations = augmentations
 
     def __len__(self):
         return self.file_names.shape[0]
@@ -26,7 +27,12 @@ class BasicDataset(Dataset):
         if self.test:
             aug_num = 0
         elif self.n_classes == 10:
-            aug_num = random.randint(0, 5)
+            if self.augmentations == 'all':
+                aug_num = random.randint(0, 5)
+            elif self.augmentations == 'no_impulse':
+                aug_num = random.randint(0, 4)
+            else:
+                aug_num = 0
         elif self.n_classes == 3:
             aug_num = random.randint(0, 4)
         mel = torch.load(osp.join(self.features_dir, f'{audio_file.replace(".wav", "")}_mel_{aug_num}.pkl'))

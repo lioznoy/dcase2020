@@ -11,10 +11,7 @@ class FocalLoss(nn.modules.loss._WeightedLoss):
         self.weight = weight  # weight parameter will act as the alpha parameter to balance class weights
 
     def forward(self, input, target):
-        eps = 1e-10
-        input_soft = F.softmax(input, dim=1) + eps
-        weight = torch.pow(-input_soft + 1., self.gamma)
-        focal = -self.alpha * weight * torch.log(input_soft)
-        loss_tmp = torch.sum(target * focal, dim=1)
-        loss = torch.mean(loss_tmp)
-        return loss
+        ce_loss = F.cross_entropy(input, target, reduction=self.reduction, weight=self.weight)
+        pt = torch.exp(-ce_loss)
+        focal_loss = self.alpha * ((1 - pt) ** self.gamma * ce_loss).mean()
+        return focal_loss

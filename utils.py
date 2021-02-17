@@ -35,14 +35,14 @@ def vec3_to_vec10(vec3, device):
     return vec10
 
 
-def plot_loss_score(epochs, train, val, timestamp, loss_score):
+def plot_loss_score(epochs, train, val, timestamp, loss_score, output_dir):
     plt.plot(epochs, train, 'r')
     plt.plot(epochs, val, 'g')
     plt.xlabel('Epochs', fontsize=18)
     plt.ylabel(f'{loss_score}', fontsize=16)
     plt.legend([f"train {loss_score}", f"validation {loss_score}"])
     plt.grid()
-    plt.savefig(osp.join('outputs', f'{loss_score}_{timestamp}.jpg'))
+    plt.savefig(osp.join(output_dir, f'{loss_score}_{timestamp}.jpg'))
     plt.close()
 
 

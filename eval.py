@@ -4,7 +4,7 @@ from sklearn.metrics import accuracy_score
 import torch.nn.functional as F
 from utils import vec3_to_vec10
 
-def eval_net(net, val_loader, device, criterion, n_classes):
+def eval_net(net, val_loader, device, criterion, n_classes, setup):
     net.eval()
     n_val = len(val_loader)
     tot_loss = 0
@@ -16,9 +16,9 @@ def eval_net(net, val_loader, device, criterion, n_classes):
             mels = mels.to(device=device, dtype=torch.float32)
             label = label.to(device=device, dtype=torch.long)
             _label = label
-            label = F.one_hot(label, n_classes)
+            # label = F.one_hot(label, n_classes)
             with torch.no_grad():
-                if n_classes == 10:
+                if setup == 'two_path':
                     pred_vec10, pred_vec3 = net(mels)
                     pred_vec = pred_vec10 * vec3_to_vec10(pred_vec3, device)
                 else:

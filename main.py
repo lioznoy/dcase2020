@@ -38,6 +38,8 @@ def get_args():
                         default='../datasets/TAU-urban-acoustic-scenes-2020-3class-development/evaluation_setup/',
                         help='dir with folds csv files')
 
+    parser.add_argument('--output_dir', '--output_dir', type=str,
+                        default='outputs', help='dir to save figures and logs')
     parser.add_argument('--dir_checkpoint', '--dir_checkpoint', type=str,
                         default='checkpoints', help='dir to save best nets during training')
     parser.add_argument('--n_classes', '--n_classes', type=int, default=10, help='number of classes')
@@ -46,6 +48,10 @@ def get_args():
                         help='backbone for CNN classifier 10 classes')
     parser.add_argument('--backbone_3', '--backbone_3', type=str, default='mobilenet_v2',
                         help='backbone for CNN classifier 3 classes')
+    parser.add_argument('--setup', '--setup', type=str, default='resnet',
+                        help='setup to run fcnn / two_path / single_path')
+    parser.add_argument('--augmentations', '--augmentations', type=str, default='all',
+                        help='without / no_impulse / all')
     return parser.parse_args()
 
 
@@ -53,8 +59,8 @@ if __name__ == '__main__':
     # load args
     args = get_args()
     assert args.n_classes == 3 or args.n_classes == 10, 'n_classes must be 3 or 10!'
-    if not osp.exists('outputs'):
-        os.mkdir('outputs')
+    if not osp.exists(args.output_dir):
+        os.mkdir(args.output_dir)
     if not osp.exists(args.dir_checkpoint):
         os.mkdir(args.dir_checkpoint)
     # current date and time
@@ -64,20 +70,28 @@ if __name__ == '__main__':
     timestamp = f'{dt_object.year}_{dt_object.month}_{dt_object.day}_{dt_object.hour}_{dt_object.minute}'
     # print args to log
     print(args)
-    print(args, file=open(osp.join('outputs', f'log_{timestamp}.txt'), 'w+'))
+    print(args, file=open(osp.join(args.output_dir, f'log_{timestamp}.txt'), 'w+'))
     # choose device
     device = torch.device(f'cuda:{args.gpu}' if torch.cuda.is_available() else 'cpu')
     # print device to log
     print(f'Using device {device}')
-    print(f'Using device {device}', file=open(osp.join('outputs', f'log_{timestamp}.txt'), 'a'))
+    print(f'Using device {device}', file=open(osp.join(args.output_dir, f'log_{timestamp}.txt'), 'a'))
     # init net
     # net = ResNetk(k=18, use_cbam_block=True, use_cbam_class=True)
     if args.n_classes == 3:
-        net = ClassifierModule3(backbone=args.backbone_3)
+        if args.setup == 'fcnn':
+            net = FCNNModel(channels=6)
+        else:
+            net = ClassifierModule3(backbone=args.backbone_3)
     elif args.n_classes == 10:
-        net = ClassifierModule10_2path(backbone10=args.backbone_10, backbone3=args.backbone_10)
+        if args.setup == 'fcnn':
+            net = FCNNModel(channels=3)
+        if args.setup == 'two_path':
+            net = ClassifierModule10_2path(backbone10=args.backbone_10, backbone3=args.backbone_10)
+        if args.setup == 'single_path':
+            net = ClassifierModule10(backbone=args.backbone_10)
     # net = BaseLine()
-    print(net, file=open(osp.join('outputs', f'log_{timestamp}.txt'), 'a'))
+    print(net, file=open(osp.join(args.output_dir, f'log_{timestamp}.txt'), 'a'))
     net.to(device=device)
     # load checkpoint weights
     if args.weights:
@@ -88,6 +102,7 @@ if __name__ == '__main__':
             train_net(net=net,
                       epochs=args.epochs,
                       data_dir=args.data_dir_3,
+                      output_dir=args.output_dir,
                       features_dir=args.features_dir_3,
                       folds_dir=args.folds_dir_3,
                       dir_checkpoint=args.dir_checkpoint,
@@ -95,11 +110,13 @@ if __name__ == '__main__':
                       lr=args.lr,
                       device=device,
                       n_classes=args.n_classes,
-                      timestamp=timestamp)
+                      timestamp=timestamp,
+                      augmentations=args.augmentations)
         elif args.n_classes == 10:
             train_net(net=net,
                       epochs=args.epochs,
                       data_dir=args.data_dir_10,
+                      output_dir=args.output_dir,
                       features_dir=args.features_dir_10,
                       folds_dir=args.folds_dir_10,
                       dir_checkpoint=args.dir_checkpoint,
@@ -107,7 +124,9 @@ if __name__ == '__main__':
                       lr=args.lr,
                       device=device,
                       n_classes=args.n_classes,
-                      timestamp=timestamp)
+                      timestamp=timestamp,
+                      setup=args.setup,
+                      augmentations=args.augmentations)
     except KeyboardInterrupt:
         torch.save(net.state_dict(), osp.join(args.dir_checkpoint, 'INTERRUPTED.pth'))
         print()
@@ -116,4 +135,4 @@ if __name__ == '__main__':
         except SystemExit:
             os._exit(0)
     print('training finished')
-    print('training finished', file=open(osp.join('outputs', f'log_{timestamp}.txt'), 'a'))
+    print('training finished', file=open(osp.join(args.output_dir, f'log_{timestamp}.txt'), 'a'))

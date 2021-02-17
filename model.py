@@ -115,7 +115,7 @@ class BaseLine(nn.Module):
 #     return x
 
 class FCNNModel(nn.Module):
-    def __init__(self, channels, num_filters=14):
+    def __init__(self, channels, num_filters=8):
         super(FCNNModel, self).__init__()
         self.conv_layer1 = nn.Sequential(
             nn.BatchNorm2d(channels),
@@ -207,4 +207,4 @@ class FCNNModel(nn.Module):
         cbam_feature = torch.multiply(x, cbam_feature)
         output = F.avg_pool2d(cbam_feature, kernel_size=(x.shape[2], x.shape[3]))
         # output = F.softmax(output, dim=1)
-        return output
+        return output.squeeze(3).squeeze(2)

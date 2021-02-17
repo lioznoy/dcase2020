@@ -4,7 +4,7 @@ import os.path as osp
 import pandas as pd
 from datetime import datetime
 import torch
-from model import ClassifierModule10, ClassifierModule3, BaseLine
+from model import ClassifierModule10, ClassifierModule3, FCNNModel, ClassifierModule10_2path
 from dataset import BasicDataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -12,6 +12,7 @@ import numpy as np
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, accuracy_score
 from utils import LABELS_10
 import matplotlib.pyplot as plt
+from quantize_weights import quantize_weights
 
 
 def get_prediction(test_loader, net, device):
@@ -48,7 +49,7 @@ def get_args():
     parser = argparse.ArgumentParser(description='Run test on dcase 2020 challenge task 1',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--weights', '--weights', type=str, help='Load model weights from a .pth file', required=True)
-    parser.add_argument('-b', '--batch_size', type=int, help='batch size for test set', default=64)
+    parser.add_argument('-b', '--batch_size', type=int, help='batch size for test set', default=32)
     parser.add_argument('--data_dir', '--data_dir', type=str,
                         default='../datasets/TAU-urban-acoustic-scenes-2020-mobile-development/audio',
                         help='dir with audio files')
@@ -61,7 +62,12 @@ def get_args():
     parser.add_argument('--output_dir', '--output_dir', type=str, default='output_test/', help='output dir')
     parser.add_argument('--n_classes', '--n_classes', type=int, default=10, help='number of classes')
     parser.add_argument('--gpu', '--gpu', type=str, default=0, help='gpu to use')
-    parser.add_argument('--backbone', '--backbone', type=str, default='resnet50', help='backbone for CNN classifier')
+    parser.add_argument('--backbone_10', '--backbone_10', type=str, default='resnet18',
+                        help='backbone for CNN classifier 10 classes')
+    parser.add_argument('--backbone_3', '--backbone_3', type=str, default='mobilenet_v2',
+                        help='backbone for CNN classifier 3 classes')
+    parser.add_argument('--setup', '--setup', type=str, default='resnet',
+                        help='setup to run fcnn / two_path / single_path')
     return parser.parse_args()
 
 
@@ -84,13 +90,28 @@ if __name__ == '__main__':
     device = torch.device(f'cuda:{args.gpu}' if torch.cuda.is_available() else 'cpu')
     print(device)
     # init net
-    net = ClassifierModule10(args.backbone)
+    if args.n_classes == 3:
+        if args.setup == 'fcnn':
+            net = FCNNModel(channels=6)
+        else:
+            net = ClassifierModule3(backbone=args.backbone_3)
+    elif args.n_classes == 10:
+        if args.setup == 'fcnn':
+            net = FCNNModel(channels=3)
+        if args.setup == 'two_path':
+            net = ClassifierModule10_2path(backbone10=args.backbone_10, backbone3=args.backbone_10)
+        if args.setup == 'single_path':
+            net = ClassifierModule10(backbone=args.backbone_10)
     # net = BaseLine()
     net.to(device=device)
-    net.load_state_dict(torch.load(args.weights, map_location=device))
+    weigths = torch.load(args.weights, map_location=device)
+    if args.n_classes == 3:
+        weigths = quantize_weights(weigths)
+    net.load_state_dict(weigths)
     net.eval()
     # test data loader
-    dataset_test = BasicDataset(args.data_dir, args.features_dir, test_df, args.n_classes, test=True)
+    dataset_test = BasicDataset(args.data_dir, args.features_dir, test_df, args.n_classes, test=True,
+                                augmentations='without')
     test_loader = DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False, num_workers=0, pin_memory=True,
                              drop_last=False)
     prediction, labels = get_prediction(test_loader, net, device)
