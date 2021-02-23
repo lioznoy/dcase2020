@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from librosa.effects import pitch_shift
 
 # Extract audio data and sampling rate from file
+audio_file = 'airport-barcelona-0-10-a.wav'
 audio_path = '../datasets/TAU-urban-acoustic-scenes-2020-mobile-development/audio/airport-barcelona-0-10-a.wav'
 waveform, sample_rate = torchaudio.load(audio_path)
 wavio.write("/mnt/disks/nlioz/DCASE2021/dcase2020/output_test/original.wav", waveform[0].numpy(), sample_rate, sampwidth=2)

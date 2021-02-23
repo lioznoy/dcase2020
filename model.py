@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 import torch.nn.functional as F
+import numpy as np
 
 
 class ClassifierModule10(nn.Module):
@@ -16,8 +17,10 @@ class ClassifierModule10(nn.Module):
         n_freq = x.shape[2]
         x_low_freq = self.net_low_freq(x[:, :, :int(n_freq / 2), :])
         x_high_freq = self.net_high_freq(x[:, :, int(n_freq / 2):, :])
+        x_low_freq = self.fc_class_vec(x_low_freq)
+        x_high_freq = self.fc_class_vec(x_high_freq)
         # fc to 10 labels
-        y = self.fc_class_vec(x_low_freq * 0.25 + x_high_freq * 0.75)
+        y = x_low_freq * 0.25 + x_high_freq * 0.75
         return y
 
 
@@ -36,23 +39,140 @@ class ClassifierModule10_2path(nn.Module):
         x_low_freq = self.net_low_freq(x[:, :, :int(n_freq / 2), :])
         x_high_freq = self.net_high_freq(x[:, :, int(n_freq / 2):, :])
         x_3class = self.class3(x)
-        y10 = self.fc_class_vec10((x_low_freq + x_high_freq) / 2)
+        x_low_freq = self.fc_class_vec10(x_low_freq)
+        x_high_freq = self.fc_class_vec10(x_high_freq)
+        y10 = x_low_freq * 0.25 + x_high_freq * 0.75
+        # y10 = (x_low_freq + x_high_freq)
         y3 = self.fc_class_vec3(x_3class)
+        # y3 = x_3class
         return y10, y3
 
 
-class ClassifierModule3(nn.Module):
-    def __init__(self, backbone):
-        super(ClassifierModule3, self).__init__()
-        self.net = models.__dict__[backbone](pretrained=False)
-        self.fc_class_vec = nn.Linear(1000, 3)
+# class ClassifierModule3(nn.Module):
+#     def __init__(self, backbone):
+#         super(ClassifierModule3, self).__init__()
+#         self.net = models.__dict__[backbone](pretrained=False)
+#         self.fc_class_vec = nn.Linear(1000, 3)
+#
+#     def forward(self, x):
+#         # pass through net
+#         x = (self.net(x[:, :3, :, :]) + self.net(x[:, 3:, :, :])) / 2
+#         # fc to 10 labels
+#         y = self.fc_class_vec(x)
+#         return y
+
+class InvertedResidual(nn.Module):
+    def __init__(self, inp, oup, stride, expand_ratio):
+        super(InvertedResidual, self).__init__()
+        self.stride = stride
+        assert stride in [1, 2]
+
+        hidden_dim = int(inp * expand_ratio)
+        self.use_res_connect = self.stride == 1 and inp == oup
+
+        if expand_ratio == 1:
+            self.conv = nn.Sequential(
+                # dw
+                nn.Conv2d(hidden_dim, hidden_dim, 3, stride, 1, groups=hidden_dim, bias=False),
+                nn.BatchNorm2d(hidden_dim),
+                nn.ReLU6(inplace=True),
+                # pw-linear
+                nn.Conv2d(hidden_dim, oup, 1, 1, 0, bias=False),
+                nn.BatchNorm2d(oup),
+            )
+        else:
+            self.conv = nn.Sequential(
+                # pw
+                nn.Conv2d(inp, hidden_dim, 1, 1, 0, bias=False),
+                nn.BatchNorm2d(hidden_dim),
+                nn.ReLU6(inplace=True),
+                # dw
+                nn.Conv2d(hidden_dim, hidden_dim, 3, stride, 1, groups=hidden_dim, bias=False),
+                nn.BatchNorm2d(hidden_dim),
+                nn.ReLU6(inplace=True),
+                # pw-linear
+                nn.Conv2d(hidden_dim, oup, 1, 1, 0, bias=False),
+                nn.BatchNorm2d(oup),
+            )
 
     def forward(self, x):
-        # pass through net
-        x = (self.net(x[:, :3, :, :]) + self.net(x[:, 3:, :, :])) / 2
-        # fc to 10 labels
-        y = self.fc_class_vec(x)
-        return y
+        if self.use_res_connect:
+            return x + self.conv(x)
+        else:
+            return self.conv(x)
+
+
+def make_divisible(x, divisible_by=8):
+    import numpy as np
+    return int(np.ceil(x * 1. / divisible_by) * divisible_by)
+
+
+def conv_bn(inp, oup, stride):
+    return nn.Sequential(
+        nn.Conv2d(inp, oup, 6, stride, 1, bias=False),
+        nn.BatchNorm2d(oup),
+        nn.ReLU6(inplace=True)
+    )
+
+
+def conv_1x1_bn(inp, oup):
+    return nn.Sequential(
+        nn.Conv2d(inp, oup, 1, 1, 0, bias=False),
+        nn.BatchNorm2d(oup),
+        nn.ReLU6(inplace=True)
+    )
+
+
+def resnet_layer(in_channels, out_channels, use_relu):
+    if use_relu:
+        return nn.Sequential(
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=1, stride=1,
+                      padding=0, bias=False),
+        )
+    else:
+        return nn.Sequential(
+            nn.BatchNorm2d(in_channels),
+            nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=1, stride=1,
+                      padding=0, bias=False),
+        )
+
+
+class ClassifierModule3(nn.Module):
+    def __init__(self, n_class=1000, input_size=224, width_mult=1.):
+        super(ClassifierModule3, self).__init__()
+        self.conv_block1 = nn.Sequential(nn.Conv2d(in_channels=6, out_channels=32, kernel_size=3, stride=2),
+                                         nn.BatchNorm2d(32),
+                                         nn.ReLU())
+        self.inv_res1 = InvertedResidual(32, 32, 2, 3)
+        self.inv_res2 = InvertedResidual(32, 40, 2, 3)
+        self.inv_res3 = InvertedResidual(40, 48, 2, 3)
+        self.resnet1 = resnet_layer(96, 48, use_relu=True)
+        self.resnet2 = resnet_layer(48, n_class, use_relu=False)
+        self.dropout = nn.Dropout2d(0.3)
+        self.bn = nn.BatchNorm2d(n_class)
+        # building classifier
+
+    def forward(self, x):
+        n_freq = x.shape[2]
+        split1 = x[:, :, 0:int(n_freq / 2), :]
+        split2 = x[:, :, int(n_freq / 2):, :]
+        split1 = self.conv_block1(split1)
+        split1 = self.inv_res1(split1)
+        split1 = self.inv_res2(split1)
+        split1 = self.inv_res3(split1)
+        split2 = self.conv_block1(split2)
+        split2 = self.inv_res1(split2)
+        split2 = self.inv_res2(split2)
+        split2 = self.inv_res3(split2)
+        MobilePath = torch.cat([split1, split2], dim=1)
+        OutputPath = self.resnet1(MobilePath)
+        OutputPath = self.dropout(OutputPath)
+        OutputPath = self.resnet2(OutputPath)
+        OutputPath = self.bn(OutputPath)
+        OutputPath = F.avg_pool2d(OutputPath, kernel_size=(OutputPath.shape[2], OutputPath.shape[3]))
+        return OutputPath.squeeze(3).squeeze(2)
 
 
 class BaseLine(nn.Module):
@@ -87,35 +207,8 @@ class BaseLine(nn.Module):
         return x
 
 
-# class ResNet_17_ASC(nn.Module):
-#     def __init__(self, use_relu):
-#         super(ResNet_17_ASC, self).__init__()
-#         self.resnet_layer1 = nn.Sequential(
-#             nn.BatchNorm2d(),
-#             if use_relu:
-#                 nn.ReLU()
-#             nn.Conv2d(in_channels=num_filters,out_channels=, kernel_size=kernel_size,stride=strides,padding='same',bias=False)
-#         )
-#
-#         self.resnet_layer2 = nn.Sequential(
-#             nn.BatchNorm2d(),
-#         if use_relu:
-#             nn.ReLU()
-#         nn.Conv2d(in_channels=num_filters, out_channels=, kernel_size=kernel_size, stride=strides, padding='same',
-#                   bias=False)
-#         )
-
-#
-#
-# def forward(self, x):
-#     x = self.layer1(x)
-#     x = self.layer2(x)
-#     x = x.view(x.size(0), -1)
-#     x = self.dense(x)
-#     return x
-
 class FCNNModel(nn.Module):
-    def __init__(self, channels, num_filters=8):
+    def __init__(self, channels, num_filters=8, output_features=10):
         super(FCNNModel, self).__init__()
         self.conv_layer1 = nn.Sequential(
             nn.BatchNorm2d(channels),
@@ -174,18 +267,19 @@ class FCNNModel(nn.Module):
         )
 
         self.resnet_layer = nn.Sequential(
-            nn.Conv2d(in_channels=num_filters * 4 * channels, out_channels=10, kernel_size=3, stride=1, padding=0, bias=False),
-            nn.BatchNorm2d(10),
+            nn.Conv2d(in_channels=num_filters * 4 * channels, out_channels=output_features, kernel_size=3, stride=1,
+                      padding=0, bias=False),
+            nn.BatchNorm2d(output_features),
             nn.ReLU(),
-            nn.BatchNorm2d(10)
+            nn.BatchNorm2d(output_features)
         )
 
         self.dense1 = nn.Sequential(
-            nn.Linear(in_features=10, out_features=5, bias=True),
+            nn.Linear(in_features=output_features, out_features=int(np.ceil(output_features / 2)), bias=True),
             nn.ReLU())
 
         self.dense2 = nn.Sequential(
-            nn.Linear(in_features=5, out_features=10, bias=True),
+            nn.Linear(in_features=int(np.ceil(output_features / 2)), out_features=output_features, bias=True),
             nn.ReLU())
 
     def forward(self, x):

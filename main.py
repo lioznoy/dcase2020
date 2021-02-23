@@ -80,12 +80,12 @@ if __name__ == '__main__':
     # net = ResNetk(k=18, use_cbam_block=True, use_cbam_class=True)
     if args.n_classes == 3:
         if args.setup == 'fcnn':
-            net = FCNNModel(channels=6)
+            net = FCNNModel(channels=6, output_features=3)
         else:
-            net = ClassifierModule3(backbone=args.backbone_3)
+            net = ClassifierModule3(n_class=3)
     elif args.n_classes == 10:
         if args.setup == 'fcnn':
-            net = FCNNModel(channels=3)
+            net = FCNNModel(channels=3, output_features=10)
         if args.setup == 'two_path':
             net = ClassifierModule10_2path(backbone10=args.backbone_10, backbone3=args.backbone_10)
         if args.setup == 'single_path':

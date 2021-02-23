@@ -54,12 +54,12 @@ def train_net(net, epochs, data_dir, output_dir, features_dir, folds_dir, dir_ch
     # set optimizer
     # optimizer = optim.RMSprop(net.parameters(), lr=lr, weight_decay=1e-5, momentum=0.9)
     # optimizer = optim.Adam(net.parameters(), lr=lr)
-    optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9)
-    # optimizer = torch.optim.AdamW(net.parameters(), lr = lr , betas=(0.9, 0.999), eps=1e-08, weight_decay=0.01, amsgrad=False)
+    # optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9)
+    optimizer = torch.optim.AdamW(net.parameters(), lr = lr , betas=(0.9, 0.999), eps=1e-08, weight_decay=0.01, amsgrad=False)
 
     scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=4)
 
-    criterion = FocalLoss(gamma=2, alpha=0.4)
+    criterion = FocalLoss()
     loss_val = []
     loss_train = []
     score_val = []
@@ -91,7 +91,7 @@ def train_net(net, epochs, data_dir, output_dir, features_dir, folds_dir, dir_ch
                     pred_vec = net(mels)
                     loss = criterion(pred_vec, label)
                 epoch_loss.append(loss.item())
-                pbar.set_postfix(**{'loss (batch)': loss.item()})
+                pbar.set_postfix(**{'loss (batch) = ': loss.item()})
                 optimizer.zero_grad()
                 loss.backward()
                 # nn.utils.clip_grad_value_(net.parameters(), 0.01)
