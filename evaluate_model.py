@@ -41,7 +41,7 @@ def plot_results(prediction, labels, output_dir, rec_device, n_classes):
     acc = round(accuracy_score(prediction, labels) * 100, 2)
     cm = confusion_matrix(prediction, labels, normalize='true')
     fig, ax = plt.subplots(figsize=(15, 15))
-    plt.rcParams.update({'font.size': 16})
+    plt.rcParams.update({'font.size': 18})
     if n_classes == 10:
         cmd = ConfusionMatrixDisplay(cm, display_labels=list(LABELS_10.keys()))
     else:
@@ -51,6 +51,8 @@ def plot_results(prediction, labels, output_dir, rec_device, n_classes):
               fontweight='bold')
     plt.xlabel('Predicted label', fontsize=18, fontweight='bold')
     plt.ylabel('True label', fontsize=18, fontweight='bold')
+    plt.setp(ax.get_xticklabels(), fontsize=18)
+    plt.setp(ax.get_yticklabels(), fontsize=18)
     plt.tight_layout()
     plt.savefig(osp.join(output_dir, f'confusion_matrix_{rec_device}.jpg'))
 
@@ -109,7 +111,9 @@ if __name__ == '__main__':
         if args.setup == 'fcnn':
             net = FCNNModel(channels=3, output_features=args.n_classes)
         if args.setup == 'two_path':
-            net = ClassifierModule10_2path(backbone10=args.backbone_10, backbone3=args.backbone_10)
+            net = ClassifierModule10_2path(backbone10=args.backbone_10, backbone3=args.backbone_10, fcnn=False)
+        if args.setup == 'two_path_fcnn':
+            net = ClassifierModule10_2path(backbone10=args.backbone_10, backbone3=args.backbone_10, fcnn=True)
         if args.setup == 'single_path':
             net = ClassifierModule10(backbone=args.backbone_10)
     # net = BaseLine()

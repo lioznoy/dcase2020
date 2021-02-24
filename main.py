@@ -12,9 +12,9 @@ from model_resnet_with_att import ResNetk
 def get_args():
     parser = argparse.ArgumentParser(description='Run train on dcase 2020 challenge task 1',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('-e', '--epochs', type=int, default=10, help='Number of epochs')
-    parser.add_argument('-b', '--batchsize', type=int, default=64, help='Batch size')
-    parser.add_argument('-l', '--lr', type=float, default=0.0001, help='Learning rate')
+    parser.add_argument('-e', '--epochs', type=int, default=100, help='Number of epochs')
+    parser.add_argument('-b', '--batchsize', type=int, default=32, help='Batch size')
+    parser.add_argument('-l', '--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('-w', '--weights', type=str, default=False, help='Load model from a .pth file')
 
     parser.add_argument('--data_dir_10', '--data_dir_10', type=str,
@@ -48,8 +48,8 @@ def get_args():
                         help='backbone for CNN classifier 10 classes')
     parser.add_argument('--backbone_3', '--backbone_3', type=str, default='mobilenet_v2',
                         help='backbone for CNN classifier 3 classes')
-    parser.add_argument('--setup', '--setup', type=str, default='resnet',
-                        help='setup to run fcnn / two_path / single_path')
+    parser.add_argument('--setup', '--setup', type=str, default='two_path',
+                        help='setup to run single_path / fcnn / two_path / two_path_fcnn /')
     parser.add_argument('--augmentations', '--augmentations', type=str, default='all',
                         help='without / no_impulse / all')
     return parser.parse_args()
@@ -87,7 +87,9 @@ if __name__ == '__main__':
         if args.setup == 'fcnn':
             net = FCNNModel(channels=3, output_features=10)
         if args.setup == 'two_path':
-            net = ClassifierModule10_2path(backbone10=args.backbone_10, backbone3=args.backbone_10)
+            net = ClassifierModule10_2path(backbone10=args.backbone_10, backbone3=args.backbone_10, fcnn=False)
+        if args.setup == 'two_path_fcnn':
+            net = ClassifierModule10_2path(backbone10=args.backbone_10, backbone3=args.backbone_10, fcnn=True)
         if args.setup == 'single_path':
             net = ClassifierModule10(backbone=args.backbone_10)
     # net = BaseLine()

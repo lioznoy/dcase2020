@@ -64,19 +64,26 @@ def fix_feature(feature_pkl, data_dir, audio_file, i):
         torch.load(feature_pkl)
     except:
         audio_path = osp.join(data_dir, audio_file)
+        print(f'failed - {audio_path}')
         mel_3d = create_fetures(audio_path, i)
         torch.save(mel_3d, feature_pkl)
 
 
-force = False
-fix = False
 parser = argparse.ArgumentParser(description='3 or 10')
 parser.add_argument('-n', '--n_classes', type=int, default=10, help='Number of epochs')
+parser.add_argument('--force', '--force', type=bool, default=False, action='store_true',
+                    help='True to Create features from scratch, False to skip existing features')
+parser.add_argument('--fix', '--fix', type=bool, default=False, action='store_true',
+                    help='True to fix defected features pkl files')
+parser.add_argument('--data_path', '--data_path', type=str, default='../datasets',
+                    help='Path to datadir contains main datasets directories')
 args = parser.parse_args()
+force = args.force
+fix = args.fix
 if args.n_classes == 3:
-    data_dir = '../datasets/TAU-urban-acoustic-scenes-2020-3class-development/'
+    data_dir = osp.join(args.data_path, 'TAU-urban-acoustic-scenes-2020-3class-development/')
 else:
-    data_dir = '../datasets/TAU-urban-acoustic-scenes-2020-mobile-development/'
+    data_dir = osp.join(args.data_path, 'TAU-urban-acoustic-scenes-2020-mobile-development/')
 
 feature_dir = osp.join(data_dir, 'mel_features_3d')
 if not osp.exists(feature_dir):

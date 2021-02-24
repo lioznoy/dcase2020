@@ -25,11 +25,16 @@ class ClassifierModule10(nn.Module):
 
 
 class ClassifierModule10_2path(nn.Module):
-    def __init__(self, backbone10, backbone3):
+    def __init__(self, backbone10, backbone3, fcnn):
         super(ClassifierModule10_2path, self).__init__()
-        self.net_low_freq = models.__dict__[backbone10](pretrained=False)
-        self.net_high_freq = models.__dict__[backbone10](pretrained=False)
-        self.class3 = models.__dict__[backbone3](pretrained=False)
+        if not fcnn:
+            self.net_low_freq = models.__dict__[backbone10](pretrained=False)
+            self.net_high_freq = models.__dict__[backbone10](pretrained=False)
+            self.class3 = models.__dict__[backbone3](pretrained=False)
+        else:
+            self.net_low_freq = FCNNModel(channels=3, output_features=10)
+            self.net_high_freq = FCNNModel(channels=3, output_features=10)
+            self.class3 = FCNNModel(channels=3, output_features=3)
         self.fc_class_vec10 = nn.Linear(1000, 10)
         self.fc_class_vec3 = nn.Linear(1000, 3)
 
@@ -39,12 +44,10 @@ class ClassifierModule10_2path(nn.Module):
         x_low_freq = self.net_low_freq(x[:, :, :int(n_freq / 2), :])
         x_high_freq = self.net_high_freq(x[:, :, int(n_freq / 2):, :])
         x_3class = self.class3(x)
-        x_low_freq = self.fc_class_vec10(x_low_freq)
-        x_high_freq = self.fc_class_vec10(x_high_freq)
-        y10 = x_low_freq * 0.25 + x_high_freq * 0.75
-        # y10 = (x_low_freq + x_high_freq)
-        y3 = self.fc_class_vec3(x_3class)
-        # y3 = x_3class
+        # y10 = self.fc_class_vec10((x_low_freq + x_high_freq) / 2)
+        y10 = (x_low_freq + x_high_freq)
+        # y3 = self.fc_class_vec3(x_3class)
+        y3 = x_3class
         return y10, y3
 
 
@@ -142,31 +145,35 @@ def resnet_layer(in_channels, out_channels, use_relu):
 class ClassifierModule3(nn.Module):
     def __init__(self, n_class=1000, input_size=224, width_mult=1.):
         super(ClassifierModule3, self).__init__()
-        self.conv_block1 = nn.Sequential(nn.Conv2d(in_channels=6, out_channels=32, kernel_size=3, stride=2),
-                                         nn.BatchNorm2d(32),
+        self.conv_block1 = nn.Sequential(nn.Conv2d(in_channels=6, out_channels=64, kernel_size=3, stride=2),
+                                         nn.BatchNorm2d(64),
                                          nn.ReLU())
-        self.inv_res1 = InvertedResidual(32, 32, 2, 3)
-        self.inv_res2 = InvertedResidual(32, 40, 2, 3)
-        self.inv_res3 = InvertedResidual(40, 48, 2, 3)
-        self.resnet1 = resnet_layer(96, 48, use_relu=True)
-        self.resnet2 = resnet_layer(48, n_class, use_relu=False)
+        self.conv_block2 = nn.Sequential(nn.Conv2d(in_channels=148, out_channels=320, kernel_size=1, stride=1),
+                                         nn.BatchNorm2d(320),
+                                         nn.ReLU())
+        self.inv_res1 = InvertedResidual(64, 64, 2, 3)
+        self.inv_res2 = InvertedResidual(64, 80, 2, 3)
+        self.inv_res3 = InvertedResidual(80, 96, 2, 3)
+        self.inv_res4 = InvertedResidual(96, 112, 2, 3)
+        self.inv_res5 = InvertedResidual(112, 130, 2, 3)
+        self.inv_res6 = InvertedResidual(130, 148, 2, 3)
+        self.resnet1 = resnet_layer(320, 320, use_relu=True)
+        self.resnet2 = resnet_layer(320, n_class, use_relu=False)
         self.dropout = nn.Dropout2d(0.3)
         self.bn = nn.BatchNorm2d(n_class)
         # building classifier
 
     def forward(self, x):
-        n_freq = x.shape[2]
-        split1 = x[:, :, 0:int(n_freq / 2), :]
-        split2 = x[:, :, int(n_freq / 2):, :]
-        split1 = self.conv_block1(split1)
-        split1 = self.inv_res1(split1)
-        split1 = self.inv_res2(split1)
-        split1 = self.inv_res3(split1)
-        split2 = self.conv_block1(split2)
-        split2 = self.inv_res1(split2)
-        split2 = self.inv_res2(split2)
-        split2 = self.inv_res3(split2)
-        MobilePath = torch.cat([split1, split2], dim=1)
+        # n_freq = x.shape[2]
+        # split1 = x[:, :, 0:int(n_freq / 2), :]
+        # split2 = x[:, :, int(n_freq / 2):, :]
+        x = self.conv_block1(x)
+        x = self.inv_res6(self.inv_res5(self.inv_res4(self.inv_res3(self.inv_res2(self.inv_res1(x))))))
+        MobilePath = self.conv_block2(x)
+        # split2 = self.conv_block1(split2)
+        # split2 = self.inv_res6(self.inv_res5(self.inv_res4(self.inv_res3(self.inv_res2(self.inv_res1(split2))))))
+        # split2 = self.conv_block2(split2)
+        # MobilePath = torch.cat([split1, split2], dim=1)
         OutputPath = self.resnet1(MobilePath)
         OutputPath = self.dropout(OutputPath)
         OutputPath = self.resnet2(OutputPath)
